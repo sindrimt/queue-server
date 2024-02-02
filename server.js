@@ -1,13 +1,17 @@
-const express = require("express");
-const http = require("http");
-const WebSocket = require("ws");
-const cors = require("cors");
-const fetch = require("node-fetch");
+import express from "express";
+import http from "http";
+import WebSocket from "ws";
+import WebSocket, { Server } from "ws";
+import cors from "cors";
+import fetch from "node-fetch";
+import dotenv from "dotenv";
 
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
-const dotenv = require("dotenv");
+const wss = new Server({ server });
+//const wss = new WebSocket.Server({ server });
+
+dotenv.config();
 
 app.use(cors());
 app.use(express.json());
