@@ -2,29 +2,28 @@ const express = require("express");
 const http = require("http");
 const WebSocket = require("ws");
 const cors = require("cors");
+const fetch = require("node-fetch");
 
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
-const fetch = require("node-fetch");
 
 app.use(cors());
 app.use(express.json());
 
 const queues = {};
-const activeChats = {};
+let activeChatsCount = {}; // Holds the number of active chats from Intercom for each platform
 
-// Import fetch at the top of your file
-
-// Function to fetch the number of active Intercom chats
-const fetchIntercomActiveChats = async (platform) => {
+// Function to fetch the number of active Intercom chats and update everyone in the queue
+const fetchAndUpdateActiveChats = async (platform) => {
+    console.log("Started fetch");
     try {
         const resp = await fetch(`https://api.intercom.io/conversations/search`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "Intercom-Version": "2.10",
                 Authorization: "Bearer dG9rOjZiYWIyNzJhX2IwZjhfNDk5NF9hM2JiX2UxOTBhYTQwZTZiOToxOjA=",
+                "Intercom-Version": "2.10",
             },
             body: JSON.stringify({
                 query: {
@@ -47,33 +46,36 @@ const fetchIntercomActiveChats = async (platform) => {
 
         const data = await resp.json();
         console.log(data.total_count);
-        // Assuming the data object has a total count of conversations, adjust based on actual API response structure
-        return data.total_count || 0;
+
+        activeChatsCount[platform] = data.total_count || 0;
     } catch (error) {
         console.error("Error fetching active chats from Intercom:", error);
-        return 0; // Return 0 in case of error to avoid blocking chat functionality
+        activeChatsCount[platform] = 0;
     }
+    notifyAllUsersInQueue(platform); // Notify all users in queue about their new position
 };
 
-const tryStartChat = (platform) => {
-    while (queues[platform] && queues[platform].length > 0 && (activeChats[platform] || 0) < 40) {
-        const userToStartChat = queues[platform].shift();
-        if (userToStartChat.ws) {
-            userToStartChat.ws.send(JSON.stringify({ message: "Your live chat session has started" }));
-            activeChats[platform] = (activeChats[platform] || 0) + 1;
-        }
-    }
-    notifyQueueUpdate(platform);
+// Update and notify periodically
+const updateActiveChatsPeriodically = (platform) => {
+    fetchAndUpdateActiveChats(platform);
+    setInterval(() => fetchAndUpdateActiveChats(platform), 10000); // Update every minute
 };
 
 const notifyQueueUpdate = (platform) => {
     if (queues[platform]) {
         queues[platform].forEach((user, index) => {
             if (user.ws) {
-                user.ws.send(JSON.stringify({ message: "Queue update", position: index + 1 }));
+                // Calculate how many people are ahead in the queue, considering active chats
+                const peopleAhead = Math.max(0, activeChatsCount[platform] + index - 40);
+                user.ws.send(JSON.stringify({ message: `There are ${peopleAhead} people in front of you`, peopleAhead }));
             }
         });
     }
+};
+
+// New function to notify all users in a queue, not just on updates
+const notifyAllUsersInQueue = (platform) => {
+    notifyQueueUpdate(platform); // Re-use existing logic for notifying users
 };
 
 wss.on("connection", (ws, req) => {
@@ -83,33 +85,33 @@ wss.on("connection", (ws, req) => {
 
     if (!queues[platform]) {
         queues[platform] = [];
+        updateActiveChatsPeriodically(platform); // Start updating active chats periodically for this platform
     }
 
-    let addedToActiveChat = false;
-
-    if ((activeChats[platform] || 0) < 40) {
-        activeChats[platform] = (activeChats[platform] || 0) + 1;
-        addedToActiveChat = true;
-        ws.send(JSON.stringify({ message: "Your live chat session has started immediately" }));
-    } else {
-        queues[platform].push({ userId, ws });
-        notifyQueueUpdate(platform);
-        ws.send(JSON.stringify({ message: "Added to queue", position: queues[platform].length }));
-    }
-
-    ws.on("close", () => {
-        if (addedToActiveChat && activeChats[platform]) {
-            // User was part of active chats
-            activeChats[platform]--;
+    fetchAndUpdateActiveChats(platform).then(() => {
+        // After fetching, decide whether to queue the user or start chat
+        let addedToActiveChat = false;
+        // If active chats are less than 40, or adjusting logic based on new requirements
+        if (activeChatsCount[platform] < 40) {
+            // Directly start chat
+            addedToActiveChat = true;
+            ws.send(JSON.stringify({ message: "Your live chat session has started immediately" }));
         } else {
-            // User was in the queue
-            const index = queues[platform].findIndex((user) => user.userId === userId);
-            if (index !== -1) {
-                queues[platform].splice(index, 1);
-            }
+            // Add to queue and notify
+            queues[platform].push({ userId, ws });
+            notifyQueueUpdate(platform); // This will now correctly inform them of the number of people ahead
         }
-        tryStartChat(platform);
-        notifyQueueUpdate(platform);
+
+        ws.on("close", () => {
+            const index = queues[platform].findIndex((user) => user.userId === userId);
+            if (addedToActiveChat) {
+                // Fetch latest active chats count to ensure accuracy, no decrement needed here
+                fetchAndUpdateActiveChats(platform);
+            } else if (index !== -1) {
+                queues[platform].splice(index, 1);
+                notifyAllUsersInQueue(platform); // Notify everyone in queue about the update
+            }
+        });
     });
 });
 
@@ -117,46 +119,3 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
-
-// app.post("/enqueue", (req, res) => {
-//     const { userId, platform } = req.body;
-
-//     if (!queues[platform]) {
-//         queues[platform] = [];
-//     }
-
-//     if ((activeChats[platform] || 0) < 5) {
-//         activeChats[platform] = (activeChats[platform] || 0) + 1;
-//         res.json({ message: "Chat started immediately" });
-//     } else {
-//         queues[platform].push({ userId, ws: null });
-//         notifyQueueUpdate(platform);
-//         res.json({ message: "Added to queue", position: queues[platform].length });
-//     }
-// });
-
-// app.post("/dequeue", (req, res) => {
-//     const { userId, platform } = req.body;
-
-//     // Check if the user is in active chats
-//     if (activeChats[platform] && activeChats[platform] > 0) {
-//         // If the user is in active chats, decrement the count and try to start a new chat
-//         activeChats[platform]--;
-//         tryStartChat(platform);
-//         res.json({ message: "User removed from active chats", userId: userId });
-//     } else {
-//         // Check if the user is in the queue
-//         if (queues[platform]) {
-//             const index = queues[platform].findIndex((user) => user.userId === userId);
-//             if (index !== -1) {
-//                 queues[platform].splice(index, 1);
-//                 notifyQueueUpdate(platform);
-//                 res.json({ message: "User dequeued", userId: userId });
-//             } else {
-//                 res.status(404).json({ message: "User not found in queue" });
-//             }
-//         } else {
-//             res.status(404).json({ message: "Platform not found" });
-//         }
-//     }
-// });
