@@ -2,7 +2,13 @@ const express = require("express");
 const http = require("http");
 const WebSocket = require("ws");
 const cors = require("cors");
-const fetch = require("node-fetch");
+// Dynamic import of node-fetch
+let fetch;
+import("node-fetch")
+    .then(({ default: nodeFetch }) => {
+        fetch = nodeFetch;
+    })
+    .catch((err) => console.error("Failed to load node-fetch:", err));
 
 const app = express();
 const server = http.createServer(app);
