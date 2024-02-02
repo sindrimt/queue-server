@@ -1,6 +1,5 @@
 import express from "express";
 import http from "http";
-import WebSocket from "ws";
 import WebSocket, { Server } from "ws";
 import cors from "cors";
 import fetch from "node-fetch";
