@@ -56,7 +56,7 @@ const fetchIntercomActiveChats = async (platform) => {
 };
 
 const tryStartChat = (platform) => {
-    while (queues[platform] && queues[platform].length > 0 && (activeChats[platform] || 0) < 40) {
+    while (queues[platform] && queues[platform].length > 0 && (activeChats[platform] || 0) < 5) {
         const userToStartChat = queues[platform].shift();
         if (userToStartChat.ws) {
             userToStartChat.ws.send(JSON.stringify({ message: "Your live chat session has started" }));
@@ -76,7 +76,7 @@ const notifyQueueUpdate = (platform) => {
     }
 };
 
-wss.on("connection", (ws, req) => {
+wss.on("connection", async (ws, req) => {
     const queryParams = new URLSearchParams(req.url?.split("?")[1]);
     const userId = queryParams.get("userId");
     const platform = queryParams.get("platform");
@@ -85,9 +85,16 @@ wss.on("connection", (ws, req) => {
         queues[platform] = [];
     }
 
+    // Fetch the number of active Intercom chats
+    const activeIntercomChats = await fetchIntercomActiveChats(platform);
+
+    console.log(activeIntercomChats);
+    const totalActiveChats = (activeChats[platform] || 0) + activeIntercomChats;
+
     let addedToActiveChat = false;
 
-    if ((activeChats[platform] || 0) < 40) {
+    if (totalActiveChats < 5) {
+        // Adjusted logic to include Intercom chats in the count
         activeChats[platform] = (activeChats[platform] || 0) + 1;
         addedToActiveChat = true;
         ws.send(JSON.stringify({ message: "Your live chat session has started immediately" }));
