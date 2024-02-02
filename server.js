@@ -1,6 +1,7 @@
 import express from "express";
 import http from "http";
-import WebSocket from "ws";
+import * as WebSocket from "ws";
+
 import cors from "cors";
 import fetch from "node-fetch";
 import dotenv from "dotenv";
