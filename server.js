@@ -7,12 +7,16 @@ const fetch = require("node-fetch");
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
+const dotenv = require("dotenv");
+dotenv.config();
 
 app.use(cors());
 app.use(express.json());
 
 const queues = {};
 let activeChatsCount = {}; // Holds the number of active chats from Intercom for each platform
+
+console.log(process.env.INTERCOM_TOKEN);
 
 // Function to fetch the number of active Intercom chats and update everyone in the queue
 const fetchAndUpdateActiveChats = async (platform) => {
@@ -22,7 +26,7 @@ const fetchAndUpdateActiveChats = async (platform) => {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                Authorization: "Bearer dG9rOjZiYWIyNzJhX2IwZjhfNDk5NF9hM2JiX2UxOTBhYTQwZTZiOToxOjA=",
+                Authorization: `Bearer ${process.env.INTERCOM_TOKEN}`,
                 "Intercom-Version": "2.10",
             },
             body: JSON.stringify({
@@ -113,6 +117,16 @@ wss.on("connection", (ws, req) => {
             }
         });
     });
+});
+
+process.on("uncaughtException", (err) => {
+    console.error("Unhandled Exception", err);
+    // Consider graceful shutdown and restart
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+    console.error("Unhandled Rejection", reason);
+    // Consider graceful shutdown and restart
 });
 
 const PORT = process.env.PORT || 3000;
