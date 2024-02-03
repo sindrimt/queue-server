@@ -49,7 +49,7 @@ const fetchAndUpdateActiveChats = async (platform) => {
                         },
                         {
                             field: "admin_assignee_id",
-                            operator: "!=",
+                            operator: "=",
                             value: "0",
                         },
                     ],
