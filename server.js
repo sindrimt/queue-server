@@ -22,8 +22,6 @@ app.use(express.json());
 const queues = {};
 let activeChatsCount = {}; // Holds the number of active chats from Intercom for each platform
 
-console.log(process.env.INTERCOM_TOKEN);
-
 // Function to fetch the number of active Intercom chats and update everyone in the queue
 const fetchAndUpdateActiveChats = async (platform) => {
     console.log("Started fetch");
@@ -40,14 +38,19 @@ const fetchAndUpdateActiveChats = async (platform) => {
                     operator: "AND",
                     value: [
                         {
-                            field: "team_assignee_id",
-                            operator: "=",
-                            value: "6830300", // Live chats
-                        },
-                        {
                             field: "open",
                             operator: "=",
                             value: "true",
+                        },
+                        {
+                            field: "team_assignee_id",
+                            operator: "=",
+                            value: "6830300",
+                        },
+                        {
+                            field: "admin_assignee_id",
+                            operator: "!=",
+                            value: "0",
                         },
                     ],
                 },
