@@ -79,7 +79,7 @@ const notifyQueueUpdate = (platform) => {
         queues[platform].forEach((user, index) => {
             if (user.ws) {
                 // Calculate how many people are ahead in the queue, considering active chats
-                const peopleAhead = Math.max(0, activeChatsCount[platform] + index - 40);
+                const peopleAhead = Math.max(0, activeChatsCount[platform] + index - 240);
                 user.ws.send(JSON.stringify({ message: `There are ${peopleAhead} people in front of you`, peopleAhead }));
             }
         });
@@ -105,7 +105,7 @@ wss.on("connection", (ws, req) => {
         // After fetching, decide whether to queue the user or start chat
         let addedToActiveChat = false;
         // If active chats are less than 40, or adjusting logic based on new requirements
-        if (activeChatsCount[platform] < 40) {
+        if (activeChatsCount[platform] < 240) {
             // Directly start chat
             addedToActiveChat = true;
             ws.send(JSON.stringify({ message: "Your live chat session has started immediately" }));
@@ -138,7 +138,7 @@ process.on("unhandledRejection", (reason, promise) => {
     // Consider graceful shutdown and restart
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
