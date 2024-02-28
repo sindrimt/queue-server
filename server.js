@@ -21,7 +21,7 @@ app.use(express.json());
 
 const queues = {};
 let activeChatsCount = {}; // Holds the number of active chats from Intercom for each platform
-const queueLimit = process.env.QUEUE_LIMIT; // Limit the number of people in the queue
+const queueLimit = parseInt(process.env.QUEUE_LIMIT); // Limit the number of people in the queue
 
 // Function to fetch the number of active Intercom chats and update everyone in the queue
 const fetchAndUpdateActiveChats = async (platform) => {
@@ -72,16 +72,32 @@ const fetchAndUpdateActiveChats = async (platform) => {
 // Update and notify periodically
 const updateActiveChatsPeriodically = (platform) => {
     fetchAndUpdateActiveChats(platform);
-    setInterval(() => fetchAndUpdateActiveChats(platform), 10000); // Update every minute
+    setInterval(() => fetchAndUpdateActiveChats(platform), 5000); // Update every minute
 };
 
 const notifyQueueUpdate = (platform) => {
     if (queues[platform]) {
         queues[platform].forEach((user, index) => {
             if (user.ws) {
-                // Calculate how many people are ahead in the queue, considering active chats
-                const peopleAhead = Math.max(0, activeChatsCount[platform] + index - 50);
-                user.ws.send(JSON.stringify({ message: `There are ${peopleAhead} people in front of you`, peopleAhead }));
+                // Calculate the user's position in the queue
+                const positionInQueue = index + 1; // Adding 1 to make it human-readable (1-based index)
+                const totalActiveAndWaiting = activeChatsCount[platform] + positionInQueue;
+
+                console.log(parseInt(process.env.QUEUE_LIMIT));
+
+                // If the user's position in the queue effectively places them within the active chats limit
+                if (totalActiveAndWaiting <= queueLimit) {
+                    user.ws.send(JSON.stringify({ message: "Your live chat session has started immediately", positionInQueue: 0 }));
+                } else {
+                    // Calculate how many people are ahead in the queue, considering active chats
+                    const peopleAhead = Math.max(0, totalActiveAndWaiting - process.env.QUEUE_LIMIT);
+                    user.ws.send(
+                        JSON.stringify({
+                            message: `Your position in the queue is: ${positionInQueue}. There are ${peopleAhead} people in front of you.`,
+                            positionInQueue,
+                        })
+                    );
+                }
             }
         });
     }
@@ -106,7 +122,7 @@ wss.on("connection", (ws, req) => {
         // After fetching, decide whether to queue the user or start chat
         let addedToActiveChat = false;
         // If active chats are less than 40, or adjusting logic based on new requirements
-        if (activeChatsCount[platform] < 50) {
+        if (activeChatsCount[platform] <= queueLimit) {
             // Directly start chat
             addedToActiveChat = true;
             ws.send(JSON.stringify({ message: "Your live chat session has started immediately" }));
