@@ -21,6 +21,7 @@ app.use(express.json());
 
 const queues = {};
 let activeChatsCount = {}; // Holds the number of active chats from Intercom for each platform
+const queueLimit = process.env.QUEUE_LIMIT; // Limit the number of people in the queue
 
 // Function to fetch the number of active Intercom chats and update everyone in the queue
 const fetchAndUpdateActiveChats = async (platform) => {
@@ -45,7 +46,7 @@ const fetchAndUpdateActiveChats = async (platform) => {
                         {
                             field: "team_assignee_id",
                             operator: "=",
-                            value: "6830300",
+                            value: process.env.INTERCOM_TEAM_ID,
                         },
                         {
                             field: "admin_assignee_id",
